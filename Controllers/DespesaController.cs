@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using ApiFinanceiro.Models;
 using ApiFinanceiro.Dtos;
-using Microsoft.AspNetCore.Http.HttpResults;
+using ApiFinanceiro.DataContexts;
+using Microsoft.EntityFrameworkCore;
 
 namespace ApiFinanceiro.Controllers
 {
@@ -10,95 +10,206 @@ namespace ApiFinanceiro.Controllers
     [ApiController]
     public class DespesaController : ControllerBase
     {
-        private static List<Despesa> listaDespesas = new()
-        {
-            new Despesa {
-                Descricao = "Conta de Luz",
-                Categoria = "Utilidades",
-                Valor = 200,
-                DataVencimento = new DateOnly(2024, 7, 10),
-                Situacao = "Pendente"
-            },
-            new Despesa {
-                Descricao = "Aluguel",
-                Categoria = "Moradia",
-                Valor = 1500,
-                DataVencimento = new DateOnly(2024, 7, 5),
-                Situacao = "Pendente"
-            },
-            new Despesa {
-                Descricao = "Internet",
-                Categoria = "Utilidades",
-                Valor = 100,
-                DataVencimento = new DateOnly(2024, 7, 15),
-                Situacao = "Pendente"
-            }
-        };
+        private readonly AppDbContext _context;
 
-        [HttpGet()]
-        public ActionResult FindAll()
+        public DespesaController(AppDbContext context)
         {
-            return Ok(listaDespesas);
+            _context = context;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> FindAll()
+        {
+            try
+            {
+                var despesas = await _context.Despesas.ToListAsync();
+                return Ok(despesas);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensagem = "Ocorreu um erro ao buscar as despesas.", detalhes = ex.Message });
+            }
         }
 
         [HttpPost()]
-        public ActionResult Create([FromBody] DespesaDto novaDespesa)
+        public async Task<ActionResult> Create([FromBody] DespesaDto novaDespesa)
         {
-            var despesa = new Despesa
+            try
             {
-                Descricao = novaDespesa.Descricao,
-                Categoria = novaDespesa.Categoria,
-                Valor = novaDespesa.Valor,
-                DataVencimento = novaDespesa.DataVencimento,
-                Situacao = "Pendente"
-            };
+                var despesa = new Despesa
+                {
+                    Descricao = novaDespesa.Descricao,
+                    Valor = novaDespesa.Valor,
+                    Categoria = novaDespesa.Categoria,
+                    DataVencimento = novaDespesa.DataVencimento,
+                    Situacao = "Pendente"
+                };
 
-            listaDespesas.Add(despesa);
+                await _context.Despesas.AddAsync(despesa);
+                await _context.SaveChangesAsync();
 
-            return Created("", despesa);
+                return Created("", despesa);
+            }
+            catch (Exception ex)
+            {
+                return Problem(ex.Message);
+            }
         }
 
         [HttpGet("{id}")]
-        public ActionResult findById(Guid id)
+        public async Task<IActionResult> findById(int id)
         {
-            var despesaById = listaDespesas.FirstOrDefault(d => d.Id == id);
-            if (despesaById is null)
+            try
             {
-                return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+                var despesaById = await _context.Despesas.FirstOrDefaultAsync(d => d.Id == id);
+                if (despesaById is null)
+                {
+                    return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+                }
+                return Ok(despesaById);
             }
-            return Ok(despesaById);
+            catch (Exception ex)
+            {
+                return Problem(ex.Message);
+            }
         }
 
         [HttpPut("{id}")]
-        public ActionResult Update(Guid id, [FromBody] DespesaUpdateDto despesaAtualizada)
+        public async Task<ActionResult> Update(int id, [FromBody] DespesaUpdateDto despesaAtualizada)
         {
-            var despesa = listaDespesas.FirstOrDefault(d => d.Id == id);
-            if (despesa is null)
+            try
             {
-                return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+                var despesa = await _context.Despesas.FirstOrDefaultAsync(d => d.Id == id);
+                if (despesa is null)
+                {
+                    return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+                }
+
+                despesa.Descricao = despesaAtualizada.Descricao;
+                despesa.Categoria = despesaAtualizada.Categoria;
+                despesa.Valor = despesaAtualizada.Valor;
+                despesa.DataVencimento = despesaAtualizada.DataVencimento;
+                despesa.Situacao = despesaAtualizada.Situacao;
+                despesa.DataPagamento = despesaAtualizada.DataPagemnto;
+                _context.Despesas.Update(despesa);
+                await _context.SaveChangesAsync();
+                return Ok(despesa);
             }
-
-            despesa.Descricao = despesaAtualizada.Descricao;
-            despesa.Categoria = despesaAtualizada.Categoria;
-            despesa.Valor = despesaAtualizada.Valor;
-            despesa.DataVencimento = despesaAtualizada.DataVencimento;
-            despesa.Situacao = despesaAtualizada.Situacao;
-            despesa.DataPagamento = despesaAtualizada.DataPagemnto;
-
-            return Ok(despesa);
+            catch (Exception ex)
+            {
+                return Problem(ex.Message);
+            }
         }
 
         [HttpDelete("{id}")]
-        public ActionResult Delete(Guid id)
+        public async Task<ActionResult> Delete(int id)
         {
-            var despesa = listaDespesas.FirstOrDefault(d => d.Id == id);
-            if (despesa is null)
+            try
             {
-                return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+                var despesa = await _context.Despesas.FirstOrDefaultAsync(d => d.Id == id);
+                if (despesa is null)
+                {
+                    return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+                }
+                _context.Despesas.Remove(despesa);
+                await _context.SaveChangesAsync();
+                return NoContent();
             }
-
-            listaDespesas.Remove(despesa);
-            return NoContent();
+            catch (Exception ex)
+            {
+                return Problem(ex.Message);
+            }
         }
+
+        //private static List<Despesa> listaDespesas = new()
+        //{
+        //    new Despesa {
+        //        Descricao = "Conta de Luz",
+        //        Categoria = "Utilidades",
+        //        Valor = 200,
+        //        DataVencimento = new DateOnly(2024, 7, 10),
+        //        Situacao = "Pendente"
+        //    },
+        //    new Despesa {
+        //        Descricao = "Aluguel",
+        //        Categoria = "Moradia",
+        //        Valor = 1500,
+        //        DataVencimento = new DateOnly(2024, 7, 5),
+        //        Situacao = "Pendente"
+        //    },
+        //    new Despesa {
+        //        Descricao = "Internet",
+        //        Categoria = "Utilidades",
+        //        Valor = 100,
+        //        DataVencimento = new DateOnly(2024, 7, 15),
+        //        Situacao = "Pendente"
+        //    }
+        //};
+
+        //[HttpGet()]
+        //public ActionResult FindAll()
+        //{
+        //    return Ok(listaDespesas);
+        //}
+
+        //[HttpPost()]
+        //public ActionResult Create([FromBody] DespesaDto novaDespesa)
+        //{
+        //    var despesa = new Despesa
+        //    {
+        //        Descricao = novaDespesa.Descricao,
+        //        Categoria = novaDespesa.Categoria,
+        //        Valor = novaDespesa.Valor,
+        //        DataVencimento = novaDespesa.DataVencimento,
+        //        Situacao = "Pendente"
+        //    };
+
+        //    listaDespesas.Add(despesa);
+
+        //    return Created("", despesa);
+        //}
+
+        //[HttpGet("{id}")]
+        //public ActionResult findById(Guid id)
+        //{
+        //    var despesaById = listaDespesas.FirstOrDefault(d => d.Id == id);
+        //    if (despesaById is null)
+        //    {
+        //        return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+        //    }
+        //    return Ok(despesaById);
+        //}
+
+        //[HttpPut("{id}")]
+        //public ActionResult Update(Guid id, [FromBody] DespesaUpdateDto despesaAtualizada)
+        //{
+        //    var despesa = listaDespesas.FirstOrDefault(d => d.Id == id);
+        //    if (despesa is null)
+        //    {
+        //        return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+        //    }
+
+        //    despesa.Descricao = despesaAtualizada.Descricao;
+        //    despesa.Categoria = despesaAtualizada.Categoria;
+        //    despesa.Valor = despesaAtualizada.Valor;
+        //    despesa.DataVencimento = despesaAtualizada.DataVencimento;
+        //    despesa.Situacao = despesaAtualizada.Situacao;
+        //    despesa.DataPagamento = despesaAtualizada.DataPagemnto;
+
+        //    return Ok(despesa);
+        //}
+
+        //[HttpDelete("{id}")]
+        //public ActionResult Delete(Guid id)
+        //{
+        //    var despesa = listaDespesas.FirstOrDefault(d => d.Id == id);
+        //    if (despesa is null)
+        //    {
+        //        return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
+        //    }
+
+        //    listaDespesas.Remove(despesa);
+        //    return NoContent();
+        //}
     }
 }
