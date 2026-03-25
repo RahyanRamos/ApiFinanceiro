@@ -3,6 +3,9 @@ using ApiFinanceiro.Models;
 using ApiFinanceiro.Dtos;
 using ApiFinanceiro.DataContexts;
 using Microsoft.EntityFrameworkCore;
+using ApiFinanceiro.Services;
+using System.Runtime.CompilerServices;
+using ApiFinanceiro.Exceptions;
 
 namespace ApiFinanceiro.Controllers
 {
@@ -10,11 +13,11 @@ namespace ApiFinanceiro.Controllers
     [ApiController]
     public class DespesaController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly DespesaService _service;
 
-        public DespesaController(AppDbContext context)
+        public DespesaController(DespesaService service)
         {
-            _context = context;
+            _service = service;
         }
 
         [HttpGet]
@@ -22,12 +25,12 @@ namespace ApiFinanceiro.Controllers
         {
             try
             {
-                var despesas = await _context.Despesas.ToListAsync();
+                var despesas = await _service.FindAll();
                 return Ok(despesas);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { mensagem = "Ocorreu um erro ao buscar as despesas.", detalhes = ex.Message });
+                return Problem(ex.Message);
             }
         }
 
@@ -36,17 +39,7 @@ namespace ApiFinanceiro.Controllers
         {
             try
             {
-                var despesa = new Despesa
-                {
-                    Descricao = novaDespesa.Descricao,
-                    Valor = novaDespesa.Valor,
-                    Categoria = novaDespesa.Categoria,
-                    DataVencimento = novaDespesa.DataVencimento,
-                    Situacao = "Pendente"
-                };
-
-                await _context.Despesas.AddAsync(despesa);
-                await _context.SaveChangesAsync();
+                var despesa = await _service.Create(novaDespesa);
 
                 return Created("", despesa);
             }
@@ -61,12 +54,13 @@ namespace ApiFinanceiro.Controllers
         {
             try
             {
-                var despesaById = await _context.Despesas.FirstOrDefaultAsync(d => d.Id == id);
-                if (despesaById is null)
-                {
-                    return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
-                }
+                var despesaById = await _service.FindById(id);
+
                 return Ok(despesaById);
+            }
+            catch(ErrorServiceException ex)
+            {
+                return ex.ToActionResult(this);
             }
             catch (Exception ex)
             {
@@ -75,25 +69,17 @@ namespace ApiFinanceiro.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult> Update(int id, [FromBody] DespesaUpdateDto despesaAtualizada)
+        public async Task<IActionResult> Update(int id, [FromBody] DespesaUpdateDto despesaAtualizada)
         {
             try
             {
-                var despesa = await _context.Despesas.FirstOrDefaultAsync(d => d.Id == id);
-                if (despesa is null)
-                {
-                    return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
-                }
+                var despesa = await _service.Update(id, despesaAtualizada);
 
-                despesa.Descricao = despesaAtualizada.Descricao;
-                despesa.Categoria = despesaAtualizada.Categoria;
-                despesa.Valor = despesaAtualizada.Valor;
-                despesa.DataVencimento = despesaAtualizada.DataVencimento;
-                despesa.Situacao = despesaAtualizada.Situacao;
-                despesa.DataPagamento = despesaAtualizada.DataPagemnto;
-                _context.Despesas.Update(despesa);
-                await _context.SaveChangesAsync();
                 return Ok(despesa);
+            }
+            catch (ErrorServiceException ex)
+            {
+                return ex.ToActionResult(this);
             }
             catch (Exception ex)
             {
@@ -102,17 +88,11 @@ namespace ApiFinanceiro.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> Delete(int id)
+        public async Task<ActionResult> Remove(int id)
         {
             try
             {
-                var despesa = await _context.Despesas.FirstOrDefaultAsync(d => d.Id == id);
-                if (despesa is null)
-                {
-                    return NotFound(new { mensagem = $"Despesa com id {id} não encontrada." });
-                }
-                _context.Despesas.Remove(despesa);
-                await _context.SaveChangesAsync();
+                await _service.Remove(id);
                 return NoContent();
             }
             catch (Exception ex)
